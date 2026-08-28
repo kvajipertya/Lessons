@@ -1,0 +1,48 @@
+package com.kvajipertya.lessons
+
+import android.content.Context
+import androidx.work.Worker
+import androidx.work.WorkerParameters
+import com.kvajipertya.lessons.data.Repository
+import kotlinx.datetime.*
+import kotlinx.coroutines.runBlocking
+
+class DailyCheckWorker(context: Context, params: WorkerParameters) : Worker(context, params) {
+    override fun doWork(): Result {
+        val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+        
+        val canNotifyNow = now.hour in 10..23
+        
+        runBlocking {
+            Repository.instance.cleanupPastReminders()
+        }
+
+        if (canNotifyNow) {
+            val reminders = runBlocking {
+                Repository.instance.reminders.value
+            }
+            
+            val upcoming = reminders.filter { !it.isCompleted }.filter {
+                try {
+                    val dueDate = LocalDate.parse(it.dueDate)
+                    val days = dueDate.toEpochDays() - now.date.toEpochDays()
+                    days in 0..3
+                } catch (e: Exception) {
+                    false
+                }
+            }
+
+            if (upcoming.isNotEmpty()) {
+                val count = upcoming.size
+                val subjects = upcoming.joinToString(", ") { it.subject }
+                NotificationHelper.showNotification(
+                    applicationContext, 
+                    "Daily School Agenda", 
+                    "You have $count item(s) due soon: $subjects"
+                )
+            }
+        }
+        
+        return Result.success()
+    }
+}
