@@ -1,3 +1,9 @@
+Simple app made for keeping track of assignments, homework and subjects for the day.
+
+
+
+
+
 This is a Kotlin Multiplatform project targeting Android.
 
 * [/shared](./shared/src) is for code that will be shared across your Compose Multiplatform applications.
