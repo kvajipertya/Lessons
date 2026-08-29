@@ -15,19 +15,23 @@ import androidx.compose.ui.unit.dp
 import com.kvajipertya.lessons.data.Repository
 import com.kvajipertya.lessons.models.SchoolDay
 import com.kvajipertya.lessons.models.TimetableEntry
-import kotlinx.datetime.Clock
-import kotlinx.datetime.LocalTime
+import kotlinx.datetime.*
 
 @Composable
 fun TimetableScreen() {
-    var selectedDay by remember { mutableStateOf(SchoolDay.Monday) }
+    val language by Repository.instance.language.collectAsState()
+    val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+    val currentDayName = now.dayOfWeek.name.lowercase().replaceFirstChar { it.uppercase() }
+    val initialDay = SchoolDay.entries.find { it.name == currentDayName } ?: SchoolDay.Monday
+    
+    var selectedDay by remember { mutableStateOf(initialDay) }
     val timetable by Repository.instance.timetable.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         floatingActionButton = {
             FloatingActionButton(onClick = { showAddDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Add Subject")
+                Icon(Icons.Default.Add, contentDescription = Strings.get("add_subject", language))
             }
         }
     ) { padding ->
@@ -46,7 +50,7 @@ fun TimetableScreen() {
 
             if (daySubjects.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No subjects for ${selectedDay.name}")
+                    Text(Strings.get("no_subjects", language))
                 }
             } else {
                 LazyColumn(
@@ -55,21 +59,7 @@ fun TimetableScreen() {
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(daySubjects) { entry ->
-                        Card(modifier = Modifier.fillMaxWidth()) {
-                            Row(
-                                modifier = Modifier.padding(16.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text(entry.subject, fontWeight = FontWeight.Bold)
-                                    Text("${entry.startTime} - ${entry.endTime}")
-                                }
-                                IconButton(onClick = { Repository.instance.removeTimetableEntry(entry.id) }) {
-                                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
-                                }
-                            }
-                        }
+                        SubjectCard(entry)
                     }
                 }
             }
@@ -98,6 +88,7 @@ fun TimetableScreen() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddSubjectDialog(onDismiss: () -> Unit, onAdd: (String, String, String) -> Unit) {
+    val language by Repository.instance.language.collectAsState()
     var subject by remember { mutableStateOf("") }
     var startTime by remember { mutableStateOf(LocalTime(8, 0)) }
     var endTime by remember { mutableStateOf(LocalTime(9, 0)) }
@@ -107,17 +98,17 @@ fun AddSubjectDialog(onDismiss: () -> Unit, onAdd: (String, String, String) -> U
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Subject") },
+        title = { Text(Strings.get("add_subject", language)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = subject, 
                     onValueChange = { subject = it }, 
-                    label = { Text("Subject Name") },
+                    label = { Text(Strings.get("subject_name", language)) },
                     modifier = Modifier.fillMaxWidth()
                 )
                 
-                Text("Start Time", style = MaterialTheme.typography.labelMedium)
+                Text(Strings.get("start_time", language), style = MaterialTheme.typography.labelMedium)
                 Surface(
                     onClick = { showStartPicker = true },
                     shape = MaterialTheme.shapes.medium,
@@ -129,7 +120,7 @@ fun AddSubjectDialog(onDismiss: () -> Unit, onAdd: (String, String, String) -> U
                     }
                 }
 
-                Text("End Time", style = MaterialTheme.typography.labelMedium)
+                Text(Strings.get("end_time", language), style = MaterialTheme.typography.labelMedium)
                 Surface(
                     onClick = { showEndPicker = true },
                     shape = MaterialTheme.shapes.medium,
@@ -148,11 +139,11 @@ fun AddSubjectDialog(onDismiss: () -> Unit, onAdd: (String, String, String) -> U
                     onAdd(subject, startTime.toString().take(5), endTime.toString().take(5))
                 }
             }) {
-                Text("Add")
+                Text(Strings.get("ok", language))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(Strings.get("cancel", language)) }
         }
     )
 
@@ -181,6 +172,26 @@ fun AddSubjectDialog(onDismiss: () -> Unit, onAdd: (String, String, String) -> U
     }
 }
 
+@Composable
+fun SubjectCard(entry: TimetableEntry) {
+    val language by Repository.instance.language.collectAsState()
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(entry.subject, fontWeight = FontWeight.Bold)
+                Text("${entry.startTime} - ${entry.endTime}", style = MaterialTheme.typography.bodySmall)
+            }
+            IconButton(onClick = { Repository.instance.removeTimetableEntry(entry.id) }) {
+                Icon(Icons.Default.Delete, contentDescription = Strings.get("delete", language), tint = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimePickerModal(
@@ -188,13 +199,14 @@ fun TimePickerModal(
     onConfirm: () -> Unit,
     state: TimePickerState
 ) {
+    val language by Repository.instance.language.collectAsState()
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(onClick = onConfirm) { Text("OK") }
+            TextButton(onClick = onConfirm) { Text(Strings.get("ok", language)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(Strings.get("cancel", language)) }
         },
         text = {
             TimeInput(state = state)

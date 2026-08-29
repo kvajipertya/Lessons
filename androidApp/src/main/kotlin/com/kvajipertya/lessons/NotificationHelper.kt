@@ -69,6 +69,26 @@ object NotificationHelper {
         }
     }
 
+    fun showSchoolNotification(context: Context, title: String, message: String) {
+        if (LessonsApp.isAppInForeground) return
+
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setPriority(NotificationCompat.PRIORITY_LOW) // "Don't make it annoying"
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setOnlyAlertOnce(true)
+            .setAutoCancel(true)
+
+        with(NotificationManagerCompat.from(context)) {
+            try {
+                notify(999, builder.build()) // Use a fixed ID for school mode so it overwrites
+            } catch (e: SecurityException) {
+            }
+        }
+    }
+
     fun scheduleReminders(context: Context, reminderId: String, title: String, subject: String, dueDateString: String) {
         val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
         
@@ -181,25 +201,36 @@ object NotificationHelper {
 
         todaySubjects.forEachIndexed { index, subject ->
             try {
-                val endTimeParts = subject.endTime.split(":")
-                val endHour = endTimeParts[0].toInt()
-                val endMinute = endTimeParts[1].toInt()
+                // Start Time
+                val startParts = subject.startTime.split(":")
+                val startTrigger = now.date.atTime(startParts[0].toInt(), startParts[1].toInt())
+                    .toInstant(TimeZone.currentSystemDefault()).toEpochMilliseconds()
                 
-                val triggerDateTime = now.date.atTime(endHour, endMinute)
-                    .toInstant(TimeZone.currentSystemDefault())
-                    .plus(2, DateTimeUnit.MINUTE)
-                
-                val triggerMillis = triggerDateTime.toEpochMilliseconds()
-                
-                if (System.currentTimeMillis() < triggerMillis) {
+                if (System.currentTimeMillis() < startTrigger) {
                     val intent = Intent(context, SchoolModeAlarmReceiver::class.java).apply {
-                        putExtra("type", "SUBJECT_END")
-                        putExtra("subjectId", subject.id)
+                        putExtra("type", "SUBJECT_START")
+                        putExtra("subjectName", subject.subject)
                     }
                     val pendingIntent = PendingIntent.getBroadcast(
                         context, 2000 + index, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                     )
-                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerMillis, pendingIntent)
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, startTrigger, pendingIntent)
+                }
+
+                // End Time + 2 Minutes
+                val endParts = subject.endTime.split(":")
+                val endTrigger = now.date.atTime(endParts[0].toInt(), endParts[1].toInt())
+                    .toInstant(TimeZone.currentSystemDefault())
+                    .plus(2, DateTimeUnit.MINUTE).toEpochMilliseconds()
+                
+                if (System.currentTimeMillis() < endTrigger) {
+                    val intent = Intent(context, SchoolModeAlarmReceiver::class.java).apply {
+                        putExtra("type", "SUBJECT_END")
+                    }
+                    val pendingIntent = PendingIntent.getBroadcast(
+                        context, 3000 + index, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, endTrigger, pendingIntent)
                 }
             } catch (e: Exception) {}
         }

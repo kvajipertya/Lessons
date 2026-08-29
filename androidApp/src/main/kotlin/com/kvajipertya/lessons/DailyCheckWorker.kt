@@ -33,12 +33,21 @@ class DailyCheckWorker(context: Context, params: WorkerParameters) : Worker(cont
             }
 
             if (upcoming.isNotEmpty()) {
+                val language = Repository.instance.language.value
                 val count = upcoming.size
                 val subjects = upcoming.joinToString(", ") { it.subject }
+                
+                val title = if (language == "Georgian") "დღიური გეგმა" else "Daily School Agenda"
+                val message = if (language == "Georgian") {
+                    "თქვენ გაქვთ $count შეხსენება: $subjects"
+                } else {
+                    "You have $count item(s) due soon: $subjects"
+                }
+
                 NotificationHelper.showNotification(
                     applicationContext, 
-                    "Daily School Agenda", 
-                    "You have $count item(s) due soon: $subjects"
+                    title, 
+                    message
                 )
             }
         }

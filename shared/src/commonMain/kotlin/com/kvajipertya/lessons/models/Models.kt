@@ -20,6 +20,16 @@ data class TimetableEntry(
 }
 
 @Serializable
+data class Homework(
+    val id: String,
+    val task: String,
+    val subject: String,
+    val isDone: Boolean = false
+) {
+    companion object
+}
+
+@Serializable
 data class Reminder(
     val id: String,
     val title: String,

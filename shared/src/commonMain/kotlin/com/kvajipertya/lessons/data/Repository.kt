@@ -2,6 +2,7 @@ package com.kvajipertya.lessons.data
 
 import com.kvajipertya.lessons.models.Reminder
 import com.kvajipertya.lessons.models.TimetableEntry
+import com.kvajipertya.lessons.models.Homework
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.set
 import kotlinx.serialization.encodeToString
@@ -24,9 +25,25 @@ class Repository(private val settings: Settings) {
     private val _reminders = MutableStateFlow<List<Reminder>>(emptyList())
     val reminders: StateFlow<List<Reminder>> = _reminders.asStateFlow()
 
+    private val _homework = MutableStateFlow<List<Homework>>(emptyList())
+    val homework: StateFlow<List<Homework>> = _homework.asStateFlow()
+
+    private val _isDarkMode = MutableStateFlow<Boolean?>(null)
+    val isDarkMode: StateFlow<Boolean?> = _isDarkMode.asStateFlow()
+
+    private val _language = MutableStateFlow("English")
+    val language: StateFlow<String> = _language.asStateFlow()
+
     init {
         _timetable.value = loadTimetable()
         _reminders.value = loadReminders()
+        _homework.value = loadHomework()
+        
+        val dark = settings.getBooleanOrNull("dark_mode")
+        _isDarkMode.value = dark
+        
+        val lang = settings.getString("language", "English")
+        _language.value = if (lang in listOf("English", "Georgian")) lang else "English"
     }
 
     fun addTimetableEntry(entry: TimetableEntry) {
@@ -54,6 +71,37 @@ class Repository(private val settings: Settings) {
             if (it.id == id) it.copy(isCompleted = !it.isCompleted) else it
         }
         saveReminders()
+    }
+
+    fun addHomework(hw: Homework) {
+        _homework.value = _homework.value + hw
+        saveHomework()
+    }
+
+    fun removeHomework(id: String) {
+        _homework.value = _homework.value.filter { it.id != id }
+        saveHomework()
+    }
+
+    fun toggleHomework(id: String) {
+        _homework.value = _homework.value.map {
+            if (it.id == id) it.copy(isDone = !it.isDone) else it
+        }
+        saveHomework()
+    }
+
+    fun setDarkMode(enabled: Boolean?) {
+        _isDarkMode.value = enabled
+        if (enabled == null) {
+            settings.remove("dark_mode")
+        } else {
+            settings["dark_mode"] = enabled
+        }
+    }
+
+    fun setLanguage(lang: String) {
+        _language.value = lang
+        settings["language"] = lang
     }
 
     fun cleanupPastReminders() {
@@ -136,6 +184,23 @@ class Repository(private val settings: Settings) {
         try {
             val string = json.encodeToString<List<Reminder>>(list)
             settings["reminders_v4"] = string
+        } catch (e: Exception) {
+        }
+    }
+
+    private fun loadHomework(): List<Homework> {
+        val string = settings.getStringOrNull("homework_v1") ?: return emptyList()
+        return try {
+            json.decodeFromString<List<Homework>>(string)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun saveHomework() {
+        try {
+            val string = json.encodeToString<List<Homework>>(_homework.value)
+            settings["homework_v1"] = string
         } catch (e: Exception) {
         }
     }

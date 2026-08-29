@@ -18,6 +18,7 @@ import kotlinx.datetime.toLocalDateTime
 
 @Composable
 fun TodayScreen() {
+    val language by Repository.instance.language.collectAsState()
     val timetable by Repository.instance.timetable.collectAsState()
     val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
     val currentDayName = now.dayOfWeek.name.lowercase().replaceFirstChar { it.uppercase() }
@@ -28,14 +29,14 @@ fun TodayScreen() {
         .sortedBy { it.startTime }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Today's Schedule", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text(Strings.get("today_title", language), fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Text(currentDayName, color = MaterialTheme.colorScheme.secondary)
         
         Spacer(modifier = Modifier.height(16.dp))
         
         if (todaySubjects.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No subjects scheduled for today!")
+                Text(Strings.get("no_subjects", language))
             }
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {

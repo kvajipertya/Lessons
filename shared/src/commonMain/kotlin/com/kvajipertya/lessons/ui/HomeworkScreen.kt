@@ -15,37 +15,44 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.kvajipertya.lessons.data.Repository
-import com.kvajipertya.lessons.models.Reminder
+import com.kvajipertya.lessons.models.Homework
+import com.kvajipertya.lessons.models.SchoolDay
 import kotlinx.datetime.*
 
 @Composable
-fun RemindersScreen(
-    onScheduleReminder: (Reminder) -> Unit = {},
-    onCancelReminder: (String) -> Unit = {}
-) {
+fun HomeworkScreen() {
     val language by Repository.instance.language.collectAsState()
-    val reminders by Repository.instance.reminders.collectAsState()
+    val homeworkList by Repository.instance.homework.collectAsState()
+    val timetable by Repository.instance.timetable.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
+
+    val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+    val currentDayName = now.dayOfWeek.name.lowercase().replaceFirstChar { it.uppercase() }
+    val currentSchoolDay = SchoolDay.entries.find { it.name == currentDayName }
+    
+    val todaySubjects = timetable.filter { it.day == currentSchoolDay }.map { it.subject }.toSet()
+    val filteredHomework = homeworkList.filter { it.subject in todaySubjects }
 
     Scaffold(
         floatingActionButton = {
             FloatingActionButton(onClick = { showAddDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = Strings.get("add_reminder", language))
+                Icon(Icons.Default.Add, contentDescription = Strings.get("add_homework", language))
             }
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize().padding(16.dp)) {
-            Text(Strings.get("reminders_title", language), style = MaterialTheme.typography.headlineMedium)
+            Text(Strings.get("homework_title", language), style = MaterialTheme.typography.headlineMedium)
+            Text("${Strings.get("subjects_today", language)}: ${todaySubjects.joinToString(", ").ifEmpty { "None" }}", style = MaterialTheme.typography.bodySmall)
             
             Spacer(modifier = Modifier.height(16.dp))
 
-            if (reminders.isEmpty()) {
+            if (filteredHomework.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(Strings.get("no_reminders", language))
+                    Text(if (todaySubjects.isEmpty()) Strings.get("no_classes_today", language) else Strings.get("no_homework_today", language))
                 }
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(reminders) { reminder ->
+                    items(filteredHomework) { hw ->
                         Card(modifier = Modifier.fillMaxWidth()) {
                             Row(
                                 modifier = Modifier.padding(16.dp),
@@ -54,37 +61,24 @@ fun RemindersScreen(
                             ) {
                                 Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                                     Checkbox(
-                                        checked = reminder.isCompleted,
-                                        onCheckedChange = { Repository.instance.toggleReminder(reminder.id) }
+                                        checked = hw.isDone,
+                                        onCheckedChange = { Repository.instance.toggleHomework(hw.id) }
                                     )
                                     Column {
-                                        val textDecoration = if (reminder.isCompleted) 
+                                        val textDecoration = if (hw.isDone) 
                                             androidx.compose.ui.text.style.TextDecoration.LineThrough 
                                             else androidx.compose.ui.text.style.TextDecoration.None
                                         
                                         Text(
-                                            reminder.title, 
+                                            hw.task, 
                                             fontWeight = FontWeight.Bold,
                                             textDecoration = textDecoration
                                         )
-                                        
-                                        val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
-                                        val dueDate = LocalDate.parse(reminder.dueDate)
-                                        val daysLeft = dueDate.toEpochDays() - now.toEpochDays()
-                                        
-                                        val timeText = when {
-                                            daysLeft < 0 -> Strings.get("overdue", language)
-                                            daysLeft == 0 -> Strings.get("today", language)
-                                            daysLeft == 1 -> Strings.get("tomorrow", language)
-                                            else -> "$daysLeft ${Strings.get("days_left", language)}"
-                                        }
-
-                                        Text("${reminder.subject} • $timeText", style = MaterialTheme.typography.bodySmall)
+                                        Text(hw.subject, style = MaterialTheme.typography.bodySmall)
                                     }
                                 }
                                 IconButton(onClick = { 
-                                    Repository.instance.removeReminder(reminder.id)
-                                    onCancelReminder(reminder.id)
+                                    Repository.instance.removeHomework(hw.id)
                                 }) {
                                     Icon(Icons.Default.Delete, contentDescription = Strings.get("delete", language), tint = MaterialTheme.colorScheme.error)
                                 }
@@ -96,17 +90,15 @@ fun RemindersScreen(
         }
 
         if (showAddDialog) {
-            AddReminderDialog(
+            AddHomeworkDialog(
                 onDismiss = { showAddDialog = false },
-                onAdd = { title, subject, date ->
-                    val newReminder = Reminder(
+                onAdd = { task, subject ->
+                    val newHw = Homework(
                         id = Clock.System.now().toEpochMilliseconds().toString(),
-                        title = title,
-                        subject = subject,
-                        dueDate = date
+                        task = task,
+                        subject = subject
                     )
-                    Repository.instance.addReminder(newReminder)
-                    onScheduleReminder(newReminder)
+                    Repository.instance.addHomework(newHw)
                     showAddDialog = false
                 }
             )
@@ -116,29 +108,29 @@ fun RemindersScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddReminderDialog(onDismiss: () -> Unit, onAdd: (String, String, String) -> Unit) {
+fun AddHomeworkDialog(onDismiss: () -> Unit, onAdd: (String, String) -> Unit) {
     val language by Repository.instance.language.collectAsState()
-    var title by remember { mutableStateOf("") }
+    var task by remember { mutableStateOf("") }
     var subject by remember { mutableStateOf("") }
-    var showDatePicker by remember { mutableStateOf(false) }
     
     val timetable by Repository.instance.timetable.collectAsState()
-    val subjects = timetable.map { it.subject }.distinct()
     
-    // Initial date: today
-    val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
-    var selectedDate by remember { mutableStateOf(now) }
+    val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+    val currentDayName = now.dayOfWeek.name.lowercase().replaceFirstChar { it.uppercase() }
+    val currentSchoolDay = SchoolDay.entries.find { it.name == currentDayName }
+    
+    val subjects = timetable.filter { it.day == currentSchoolDay }.map { it.subject }.distinct()
     
     var expanded by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(Strings.get("add_reminder", language)) },
+        title = { Text(Strings.get("add_homework", language)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
-                    value = title, 
-                    onValueChange = { title = it }, 
+                    value = task, 
+                    onValueChange = { task = it }, 
                     label = { Text(Strings.get("task", language)) },
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -162,7 +154,7 @@ fun AddReminderDialog(onDismiss: () -> Unit, onAdd: (String, String, String) -> 
                     ) {
                         if (subjects.isEmpty()) {
                             DropdownMenuItem(
-                                text = { Text("No subjects found. Add them in Timetable.") },
+                                text = { Text("No subjects found.") },
                                 onClick = { expanded = false }
                             )
                         } else {
@@ -178,30 +170,10 @@ fun AddReminderDialog(onDismiss: () -> Unit, onAdd: (String, String, String) -> 
                         }
                     }
                 }
-
-                // Date Picker Trigger
-                Box(modifier = Modifier.fillMaxWidth().clickable { showDatePicker = true }) {
-                    OutlinedTextField(
-                        value = selectedDate.toString(),
-                        onValueChange = { },
-                        readOnly = true,
-                        label = { Text(Strings.get("due_date", language)) },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = false,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            disabledBorderColor = MaterialTheme.colorScheme.outline,
-                            disabledLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    )
-                }
-                
             }
         },
         confirmButton = {
-            Button(onClick = { if (title.isNotBlank() && subject.isNotBlank()) onAdd(title, subject, selectedDate.toString()) }) {
+            Button(onClick = { if (task.isNotBlank() && subject.isNotBlank()) onAdd(task, subject) }) {
                 Text(Strings.get("ok", language))
             }
         },
@@ -209,27 +181,4 @@ fun AddReminderDialog(onDismiss: () -> Unit, onAdd: (String, String, String) -> 
             TextButton(onClick = onDismiss) { Text(Strings.get("cancel", language)) }
         }
     )
-
-    if (showDatePicker) {
-        val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = Clock.System.now().toEpochMilliseconds()
-        )
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let {
-                        selectedDate = Instant.fromEpochMilliseconds(it)
-                            .toLocalDateTime(TimeZone.UTC).date
-                    }
-                    showDatePicker = false
-                }) { Text(Strings.get("ok", language)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text(Strings.get("cancel", language)) }
-            }
-        ) {
-            DatePicker(state = datePickerState)
-        }
-    }
 }

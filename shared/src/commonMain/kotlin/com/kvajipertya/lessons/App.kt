@@ -1,21 +1,17 @@
 package com.kvajipertya.lessons
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.kvajipertya.lessons.data.Repository
 import com.kvajipertya.lessons.models.Reminder
-import com.kvajipertya.lessons.ui.RemindersScreen
-import com.kvajipertya.lessons.ui.TimetableScreen
-import com.kvajipertya.lessons.ui.TodayScreen
+import com.kvajipertya.lessons.ui.*
 import androidx.compose.ui.tooling.preview.Preview
 
 @Composable
@@ -24,10 +20,19 @@ fun App(
     onScheduleReminder: (Reminder) -> Unit = {},
     onCancelReminder: (String) -> Unit = {}
 ) {
+    val language by Repository.instance.language.collectAsState()
     val navController = rememberNavController()
     var currentScreen by remember { mutableStateOf("today") }
+    var homeClickCount by remember { mutableStateOf(0) }
+    
+    val darkModeSetting by Repository.instance.isDarkMode.collectAsState()
+    val isDark = when(darkModeSetting) {
+        true -> true
+        false -> false
+        else -> androidx.compose.foundation.isSystemInDarkTheme()
+    }
 
-    val colorScheme = if (isSystemInDarkTheme()) {
+    val colorScheme = if (isDark) {
         darkColorScheme()
     } else {
         lightColorScheme()
@@ -38,22 +43,35 @@ fun App(
             bottomBar = {
                 NavigationBar {
                     NavigationBarItem(
-                        icon = { Icon(Icons.Default.Home, contentDescription = "Today") },
-                        label = { Text("Today") },
+                        icon = { Icon(Icons.Default.Home, contentDescription = Strings.get("today", language)) },
+                        label = { Text(Strings.get("today", language)) },
                         selected = currentScreen == "today",
                         onClick = {
-                            currentScreen = "today"
-                            navController.navigate("today") {
-                                popUpTo(navController.graph.startDestinationId)
-                                launchSingleTop = true
+                            if (currentScreen == "today") {
+                                homeClickCount++
+                                if (homeClickCount >= 6) {
+                                    homeClickCount = 0
+                                    currentScreen = "settings"
+                                    navController.navigate("settings") {
+                                        launchSingleTop = true
+                                    }
+                                }
+                            } else {
+                                homeClickCount = 1
+                                currentScreen = "today"
+                                navController.navigate("today") {
+                                    popUpTo(navController.graph.startDestinationId)
+                                    launchSingleTop = true
+                                }
                             }
                         }
                     )
                     NavigationBarItem(
-                        icon = { Icon(Icons.Default.DateRange, contentDescription = "Timetable") },
-                        label = { Text("Timetable") },
+                        icon = { Icon(Icons.Default.DateRange, contentDescription = Strings.get("timetable_title", language)) },
+                        label = { Text(Strings.get("timetable_title", language)) },
                         selected = currentScreen == "timetable",
                         onClick = {
+                            homeClickCount = 0
                             currentScreen = "timetable"
                             navController.navigate("timetable") {
                                 popUpTo(navController.graph.startDestinationId)
@@ -62,12 +80,26 @@ fun App(
                         }
                     )
                     NavigationBarItem(
-                        icon = { Icon(Icons.Default.Notifications, contentDescription = "Reminders") },
-                        label = { Text("Reminders") },
+                        icon = { Icon(Icons.Default.Notifications, contentDescription = Strings.get("reminders_title", language)) },
+                        label = { Text(Strings.get("reminders_title", language)) },
                         selected = currentScreen == "reminders",
                         onClick = {
+                            homeClickCount = 0
                             currentScreen = "reminders"
                             navController.navigate("reminders") {
+                                popUpTo(navController.graph.startDestinationId)
+                                launchSingleTop = true
+                            }
+                        }
+                    )
+                    NavigationBarItem(
+                        icon = { Icon(Icons.Default.Edit, contentDescription = Strings.get("homework_title", language)) },
+                        label = { Text(Strings.get("homework_title", language)) },
+                        selected = currentScreen == "homework",
+                        onClick = {
+                            homeClickCount = 0
+                            currentScreen = "homework"
+                            navController.navigate("homework") {
                                 popUpTo(navController.graph.startDestinationId)
                                 launchSingleTop = true
                             }
@@ -86,6 +118,8 @@ fun App(
                 composable("reminders") { 
                     RemindersScreen(onScheduleReminder, onCancelReminder) 
                 }
+                composable("homework") { HomeworkScreen() }
+                composable("settings") { SettingsScreen() }
             }
         }
     }
